@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101827">
+<title>AI Trading Analysis</title>
+<link rel="manifest" href="/static/manifest.json">
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#131f31;--muted:#9aabc2;--line:#25344a;--white:#edf3fb}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--white);font:16px system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:720px;margin:auto;padding:20px 15px 40px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:6px 0 22px}
+h1{font-size:20px;margin:0;letter-spacing:.4px}.sub{color:var(--muted);font-size:13px;margin-top:5px}
+.pill{border:1px solid #285c43;color:#7ee2a8;border-radius:99px;padding:6px 10px;font-size:11px;white-space:nowrap}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;margin:12px 0}
+label{display:block;color:var(--muted);font-size:12px;margin:0 0 7px}
+select,button{width:100%;padding:13px;border-radius:11px;border:1px solid var(--line);background:#0d1727;color:var(--white);font-size:15px}
+button{background:#2563eb;border:0;font-weight:700;margin-top:12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.metric{background:#0d1727;border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0}
+.metric small{display:block;color:var(--muted);font-size:11px}.metric strong{display:block;margin-top:5px;font-size:17px;overflow-wrap:anywhere}
+.signal{text-align:center;padding:24px 12px}.signal h2{font-size:36px;margin:2px 0 4px}.signal p{color:var(--muted);font-size:13px;margin:0}
+.up{color:#4ade80}.down{color:#fb7185}.wait{color:#fbbf24}
+ul{padding-left:20px;color:#c7d4e5;line-height:1.7}.note{font-size:12px;color:var(--muted);line-height:1.6}
+.status{font-size:12px;color:var(--muted);margin-top:10px;min-height:18px}
+@media(min-width:600px){.grid{grid-template-columns:repeat(4,1fr)}}
+</style>
+</head>
+<body>
+<main>
+ <div class="top"><div><h1>AI TRADING ANALYSIS</h1><div class="sub">Mobile web app · 1-minute indicators</div></div><span class="pill">READ-ONLY</span></div>
+ <section class="panel">
+  <div class="grid">
+   <div><label>MARKET</label><select id="market"><option value="forex">Forex</option><option value="otc">Quotex OTC</option></select></div>
+   <div><label>PAIR</label><select id="pair"><option>EUR/USD</option><option>GBP/USD</option><option>USD/JPY</option><option>AUD/USD</option><option>USD/CHF</option></select></div>
+  </div>
+  <button id="go">Analyze market</button><div class="status" id="status">Ready. Analysis sirf button press par hogi.</div>
+ </section>
+ <section class="panel signal">
+  <label>ANALYSIS RESULT</label><h2 id="signal" class="wait">WAIT</h2><p id="summary">Abhi koi analysis nahi hui.</p>
+ </section>
+ <section class="panel">
+  <label>INDICATORS</label><div class="grid">
+   <div class="metric"><small>LAST PRICE</small><strong id="price">—</strong></div>
+   <div class="metric"><small>EMA 9</small><strong id="ema9">—</strong></div>
+   <div class="metric"><small>EMA 21</small><strong id="ema21">—</strong></div>
+   <div class="metric"><small>RSI 14</small><strong id="rsi">—</strong></div>
+  </div>
+ </section>
+ <section class="panel"><label>ANALYSIS REASONS</label><ul id="reasons"><li>Market select karke Analyze market dabayein.</li></ul><p class="note" id="warning">Signal probability ya guaranteed next-candle prediction nahi hai.</p></section>
+ <p class="note">Forex data Twelve Data se aata hai. Quotex OTC ke liye verified official public feed configured nahi, is liye OTC par signal nahi diya jata. Yeh educational, rule-based indicator tool hai; financial advice nahi. Real-money trade ke liye use na karein.</p>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+$("market").addEventListener("change",()=>{
+ const otc=$("market").value==="otc";
+ $("pair").innerHTML=otc?'<option>EUR/USD OTC</option><option>GBP/USD OTC</option><option>USD/JPY OTC</option><option>AUD/USD OTC</option><option>BTC/USD OTC</option>':'<option>EUR/USD</option><option>GBP/USD</option><option>USD/JPY</option><option>AUD/USD</option><option>USD/CHF</option>';
+});
+$("go").addEventListener("click",async()=>{
+ const market=$("market").value,pair=$("pair").value;
+ $("status").textContent="Market data fetch ho raha hai...";
+ $("go").disabled=true;
+ try{
+  const r=await fetch(`/api/analyze?market=${encodeURIComponent(market)}&pair=${encodeURIComponent(pair)}`);
+  const d=await r.json();
+  if(!r.ok)throw new Error(d.detail||"Request failed");
+  if(d.signal==="UNAVAILABLE"){
+   $("signal").textContent="UNAVAILABLE";$("signal").className="wait";
+   $("summary").textContent=d.message;
+   $("reasons").innerHTML="<li>OTC feed configured nahi.</li>";
+   ["price","ema9","ema21","rsi"].forEach(x=>$(x).textContent="—");
+  }else{
+   $("signal").textContent=d.signal;$("signal").className=d.signal.toLowerCase();
+   $("summary").textContent=`${d.pair} · Score ${d.score}/3 · Last candle ${d.last_candle_time}`;
+   $("price").textContent=d.last_close;$("ema9").textContent=d.ema9.toFixed(5);
+   $("ema21").textContent=d.ema21.toFixed(5);$("rsi").textContent=d.rsi14.toFixed(1);
+   $("reasons").innerHTML=d.reasons.map(x=>`<li>${x}</li>`).join("");
+   $("warning").textContent=d.warning;
+  }
+  $("status").textContent="Analysis complete · "+new Date().toLocaleTimeString();
+ }catch(e){$("status").textContent="Error: "+e.message;}
+ finally{$("go").disabled=false;}
+});
+</script>
+</body></html>
